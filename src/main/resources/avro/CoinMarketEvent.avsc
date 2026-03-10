@@ -1,0 +1,138 @@
+{
+  "namespace": "com.stitch80.connect.coingecko.avro",
+  "type": "record",
+  "name": "CoinMarketEvent",
+  "doc": "CoinGecko market data snapshot for a single coin",
+  "fields": [
+    {
+      "name": "coinId",
+      "type": "string",
+      "doc": "CoinGecko coin ID, e.g. bitcoin"
+    },
+    {
+      "name": "symbol",
+      "type": "string",
+      "doc": "Coin symbol, e.g. btc"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "doc": "Coin name, e.g. Bitcoin"
+    },
+    {
+      "name": "currentPrice",
+      "type": "double",
+      "doc": "Current price in vs_currency"
+    },
+    {
+      "name": "marketCap",
+      "type": "long",
+      "doc": "Market capitalization"
+    },
+    {
+      "name": "marketCapRank",
+      "type": ["null", "int"],
+      "default": null,
+      "doc": "Market cap ranking"
+    },
+    {
+      "name": "totalVolume",
+      "type": "double",
+      "doc": "24h trading volume"
+    },
+    {
+      "name": "high24h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "24h high price"
+    },
+    {
+      "name": "low24h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "24h low price"
+    },
+    {
+      "name": "priceChange24h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Absolute price change in 24h"
+    },
+    {
+      "name": "priceChangePercentage24h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Price change percentage in 24h"
+    },
+    {
+      "name": "priceChangePercentage1h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Price change percentage in 1h"
+    },
+    {
+      "name": "priceChangePercentage7d",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Price change percentage in 7d"
+    },
+    {
+      "name": "priceChangePercentage14d",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Price change percentage in 14d"
+    },
+    {
+      "name": "priceChangePercentage30d",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Price change percentage in 30d"
+    },
+    {
+      "name": "circulatingSupply",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Circulating supply"
+    },
+    {
+      "name": "totalSupply",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Total supply"
+    },
+    {
+      "name": "ath",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "All-time high price"
+    },
+    {
+      "name": "athChangePercentage",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Change from ATH in percentage"
+    },
+    {
+      "name": "atl",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "All-time low price"
+    },
+    {
+      "name": "atlChangePercentage",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Change from ATL in percentage"
+    },
+    {
+      "name": "lastUpdated",
+      "type": "string",
+      "doc": "CoinGecko last_updated ISO timestamp"
+    },
+    {
+      "name": "ingestionTime",
+      "type": "long",
+      "doc": "When our connector ingested this record (ms since epoch)"
+    }
+  ]
+}

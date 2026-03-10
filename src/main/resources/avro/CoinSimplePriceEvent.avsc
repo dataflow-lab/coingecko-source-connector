@@ -1,0 +1,46 @@
+{
+  "namespace": "com.stitch80.connect.coingecko.avro",
+  "type": "record",
+  "name": "CoinSimplePriceEvent",
+  "doc": "CoinGecko simple price snapshot for a single coin",
+  "fields": [
+    {
+      "name": "coinId",
+      "type": "string",
+      "doc": "CoinGecko coin ID, e.g. bitcoin"
+    },
+    {
+      "name": "price",
+      "type": "double",
+      "doc": "Current price in vs_currency"
+    },
+    {
+      "name": "vol24h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "24h trading volume"
+    },
+    {
+      "name": "change24h",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "24h price change percentage"
+    },
+    {
+      "name": "marketCap",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Market capitalization"
+    },
+    {
+      "name": "lastUpdatedAt",
+      "type": "long",
+      "doc": "CoinGecko last_updated_at unix timestamp"
+    },
+    {
+      "name": "ingestionTime",
+      "type": "long",
+      "doc": "When our connector ingested this record (ms since epoch)"
+    }
+  ]
+}
