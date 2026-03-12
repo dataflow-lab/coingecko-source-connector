@@ -3,8 +3,8 @@
 # Docker container, restart Connect, and verify the plugin is loaded.
 #
 # Usage: ./deploy-connector.sh [CONNECT_CONTAINER] [CONNECT_HOST]
-#   CONNECT_CONTAINER  defaults to kafka-connect
-#   CONNECT_HOST       defaults to localhost:8083
+#   CONNECT_CONTAINER  defaults to kafka-connect-local
+#   CONNECT_HOST       defaults to localhost:18083
 #
 # Prerequisites:
 #   - The kafka-connect container must be running
@@ -14,8 +14,8 @@
 
 set -euo pipefail
 
-CONNECT_CONTAINER="${1:-kafka-connect}"
-CONNECT_HOST="${2:-localhost:8083}"
+CONNECT_CONTAINER="${1:-kafka-connect-local}"
+CONNECT_HOST="${2:-localhost:18083}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_NAME="stitch80-kafka-connect-coingecko"
 PLUGIN_DIR="/usr/share/confluent-hub-components/$PLUGIN_NAME"
