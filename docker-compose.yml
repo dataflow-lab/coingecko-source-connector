@@ -116,7 +116,7 @@ services:
     ports:
       - "18083:8083"
     volumes:
-      - ./person.avsc:/etc/kafka-connect/schemas/person.avsc
+      - ./person.avsc:/etc/kafka-connect/schemas/person.avsc #For Datagen Source connector
     environment:
       CLASSPATH: "/etc/kafka-connect/schemas"
       CONNECT_BOOTSTRAP_SERVERS: kafka-1-local:9090,kafka-2-local:9090,kafka-3-local:9090
