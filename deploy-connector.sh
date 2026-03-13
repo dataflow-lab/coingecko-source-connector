@@ -2,9 +2,9 @@
 # Build the CoinGecko source connector fat JAR, copy it into the kafka-connect
 # Docker container, restart Connect, and verify the plugin is loaded.
 #
-# Usage: ./deploy-connector.sh [CONNECT_CONTAINER] [CONNECT_HOST]
-#   CONNECT_CONTAINER  defaults to kafka-connect-local
-#   CONNECT_HOST       defaults to localhost:18083
+# Usage: ./deploy-connector.sh [CONNECT_CONTAINERS] [CONNECT_HOST]
+#   CONNECT_CONTAINERS  space-separated list (default: "kafka-connect-1-local kafka-connect-2-local kafka-connect-3-local")
+#   CONNECT_HOST        defaults to localhost:18083
 #
 # Prerequisites:
 #   - The kafka-connect container must be running
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-CONNECT_CONTAINER="${1:-kafka-connect-local}"
+CONNECT_CONTAINERS="${1:-kafka-connect-1-local kafka-connect-2-local kafka-connect-3-local}"
 CONNECT_HOST="${2:-localhost:18083}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_NAME="stitch80-kafka-connect-coingecko"
@@ -33,26 +33,35 @@ fi
 echo "    Built plugin contents:"
 ls -lh "$LOCAL_PLUGIN"
 
-# ── 2. Verify container is running ──────────────────────────────────────────
-if ! docker inspect -f '{{.State.Running}}' "$CONNECT_CONTAINER" 2>/dev/null | grep -q true; then
-  echo "ERROR: Container '$CONNECT_CONTAINER' is not running."
-  echo "       Start the stack first: docker compose -f devops/docker/full-stack.yaml up -d"
-  exit 1
-fi
+# ── 2. Deploy plugin to each Connect container ───────────────────────────────
+for CONNECT_CONTAINER in $CONNECT_CONTAINERS; do
+  echo ""
+  echo "==> Deploying to $CONNECT_CONTAINER..."
 
-# ── 3. Copy plugin into container ─────────────────────────────────────────
-echo "==> Removing old plugin from container (if any)..."
-docker exec "$CONNECT_CONTAINER" rm -rf "$PLUGIN_DIR" 2>/dev/null || true
+  if ! docker inspect -f '{{.State.Running}}' "$CONNECT_CONTAINER" 2>/dev/null | grep -q true; then
+    echo "WARNING: Container '$CONNECT_CONTAINER' is not running, skipping."
+    continue
+  fi
 
-echo "==> Copying plugin directory to $CONNECT_CONTAINER:$PLUGIN_DIR/"
-docker cp "$LOCAL_PLUGIN" "$CONNECT_CONTAINER:$PLUGIN_DIR"
+  echo "    Removing old plugin (if any)..."
+  docker exec "$CONNECT_CONTAINER" rm -rf "$PLUGIN_DIR" 2>/dev/null || true
 
-echo "==> Verifying plugin in container..."
-docker exec "$CONNECT_CONTAINER" ls -lhR "$PLUGIN_DIR"
+  echo "    Copying plugin directory to $CONNECT_CONTAINER:$PLUGIN_DIR/"
+  docker cp "$LOCAL_PLUGIN" "$CONNECT_CONTAINER:$PLUGIN_DIR"
 
-# ── 4. Restart Kafka Connect to pick up the new plugin ──────────────────────
-echo "==> Restarting Kafka Connect to load the new plugin..."
-docker restart "$CONNECT_CONTAINER"
+  echo "    Verifying plugin in container..."
+  docker exec "$CONNECT_CONTAINER" ls -lhR "$PLUGIN_DIR"
+done
+
+# ── 3. Restart all Connect containers to pick up the new plugin ──────────────
+echo ""
+echo "==> Restarting Connect containers..."
+for CONNECT_CONTAINER in $CONNECT_CONTAINERS; do
+  if docker inspect -f '{{.State.Running}}' "$CONNECT_CONTAINER" 2>/dev/null | grep -q true; then
+    echo "    Restarting $CONNECT_CONTAINER..."
+    docker restart "$CONNECT_CONTAINER"
+  fi
+done
 
 echo "==> Waiting for Kafka Connect to be ready..."
 until curl -s -o /dev/null -w "%{http_code}" "http://${CONNECT_HOST}/connectors" 2>/dev/null | grep -q "200"; do
@@ -61,7 +70,7 @@ until curl -s -o /dev/null -w "%{http_code}" "http://${CONNECT_HOST}/connectors"
 done
 echo "    Kafka Connect is ready."
 
-# ── 5. Verify plugin is loaded ──────────────────────────────────────────────
+# ── 4. Verify plugin is loaded ──────────────────────────────────────────────
 echo "==> Checking installed connector plugins..."
 if curl -s "http://${CONNECT_HOST}/connector-plugins" 2>/dev/null | grep -q "CoinGeckoSourceConnector"; then
   echo "    ✓ CoinGeckoSourceConnector plugin found"
@@ -77,7 +86,7 @@ fi
 
 echo ""
 echo "=== Deployment complete ==="
-echo "  Container:  $CONNECT_CONTAINER"
+echo "  Containers: $CONNECT_CONTAINERS"
 echo "  Plugin dir: $PLUGIN_DIR"
 echo "  Connect:    http://$CONNECT_HOST"
 echo ""
@@ -89,4 +98,4 @@ echo "  Status:     curl -s http://$CONNECT_HOST/connectors/coingecko-source/sta
 echo "  Pause:      curl -X PUT http://$CONNECT_HOST/connectors/coingecko-source/pause"
 echo "  Resume:     curl -X PUT http://$CONNECT_HOST/connectors/coingecko-source/resume"
 echo "  Delete:     curl -X DELETE http://$CONNECT_HOST/connectors/coingecko-source"
-echo "  Logs:       docker logs -f $CONNECT_CONTAINER"
+echo "  Logs:       docker logs -f kafka-connect-1-local"

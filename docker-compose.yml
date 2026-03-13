@@ -34,6 +34,66 @@ x-kafka-common: &kafka-common
     timeout: 3s
     retries: 20
 
+x-kafka-connect-common-env: &kafka-connect-common-env
+  CLASSPATH: "/etc/kafka-connect/schemas"
+  CONNECT_BOOTSTRAP_SERVERS: kafka-1-local:9090,kafka-2-local:9090,kafka-3-local:9090
+  CONNECT_REST_PORT: 8083
+
+  CONNECT_GROUP_ID: "trading-connect"
+  CONNECT_CONFIG_STORAGE_TOPIC: "_connect-configs"
+  CONNECT_OFFSET_STORAGE_TOPIC: "_connect-offsets"
+  CONNECT_STATUS_STORAGE_TOPIC: "_connect-status"
+  CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR:-3}
+  CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR:-3}
+  CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR:-3}
+
+  CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+  CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+  CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry-local:8081
+
+  CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+
+x-kafka-connect-common: &kafka-connect-common
+  image: confluentinc/cp-kafka-connect:7.9.0
+  restart: unless-stopped
+  volumes:
+    - ./person.avsc:/etc/kafka-connect/schemas/person.avsc #For Datagen Source connector
+  command:
+    - bash
+    - -c
+    - |
+      echo "Installing JDBC Sink connector..."
+      confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest
+      echo "Installing Datagen Source connector..."
+      confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:latest
+      echo "Installing Elasticsearch Sink connector..."
+      confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:latest
+      echo "Installing FileStream connectors..."
+      mkdir -p /usr/share/confluent-hub-components/kafka-connect-file
+      curl -sL -o /usr/share/confluent-hub-components/kafka-connect-file/connect-file-3.7.0.jar \
+        https://repo1.maven.org/maven2/org/apache/kafka/connect-file/3.7.0/connect-file-3.7.0.jar
+      echo "Starting Kafka Connect..."
+      /etc/confluent/docker/run
+  depends_on:
+    kafka-1-local:
+      condition: service_healthy
+    kafka-2-local:
+      condition: service_healthy
+    kafka-3-local:
+      condition: service_healthy
+    schema-registry-local:
+      condition: service_healthy
+    postgres-local:
+      condition: service_healthy
+    elasticsearch-local:
+      condition: service_healthy
+  healthcheck:
+    test: [ "CMD-SHELL", "curl -f http://localhost:8083/connectors || exit 1" ]
+    interval: 15s
+    timeout: 10s
+    retries: 10
+    start_period: 60s
+
 services:
   # ── Kafka Node 1 ──
   kafka-1-local:
@@ -109,49 +169,26 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── Kafka Connect (JDBC Sink) ──
-  kafka-connect-local:
-    image: confluentinc/cp-kafka-connect:7.9.0
-    container_name: kafka-connect-local
+  # ── Kafka Connect Cluster (3-node) ──
+  kafka-connect-1-local:
+    <<: *kafka-connect-common
+    container_name: kafka-connect-1-local
+    hostname: kafka-connect-1-local
     ports:
       - "18083:8083"
-    volumes:
-      - ./person.avsc:/etc/kafka-connect/schemas/person.avsc #For Datagen Source connector
     environment:
-      CLASSPATH: "/etc/kafka-connect/schemas"
-      CONNECT_BOOTSTRAP_SERVERS: kafka-1-local:9090,kafka-2-local:9090,kafka-3-local:9090
-      CONNECT_REST_PORT: 8083
-      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect-local
+      <<: *kafka-connect-common-env
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect-1-local
 
-      CONNECT_GROUP_ID: "trading-connect"
-      CONNECT_CONFIG_STORAGE_TOPIC: "_connect-configs"
-      CONNECT_OFFSET_STORAGE_TOPIC: "_connect-offsets"
-      CONNECT_STATUS_STORAGE_TOPIC: "_connect-status"
-      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR:-3}
-      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR:-3}
-      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: ${KAFKA_REPLICATION_FACTOR:-3}
-
-      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
-      CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
-      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry-local:8081
-
-      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
-    command:
-      - bash
-      - -c
-      - |
-        echo "Installing JDBC Sink connector..."
-        confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest
-        echo "Installing Datagen Source connector..."
-        confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:latest
-        echo "Installing Elasticsearch Sink connector..."
-        confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:latest
-        echo "Installing FileStream connectors..."
-        mkdir -p /usr/share/confluent-hub-components/kafka-connect-file
-        curl -sL -o /usr/share/confluent-hub-components/kafka-connect-file/connect-file-3.7.0.jar \
-          https://repo1.maven.org/maven2/org/apache/kafka/connect-file/3.7.0/connect-file-3.7.0.jar
-        echo "Starting Kafka Connect..."
-        /etc/confluent/docker/run
+  kafka-connect-2-local:
+    <<: *kafka-connect-common
+    container_name: kafka-connect-2-local
+    hostname: kafka-connect-2-local
+    ports:
+      - "18084:8083"
+    environment:
+      <<: *kafka-connect-common-env
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect-2-local
     depends_on:
       kafka-1-local:
         condition: service_healthy
@@ -165,12 +202,35 @@ services:
         condition: service_healthy
       elasticsearch-local:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8083/connectors || exit 1" ]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
+      kafka-connect-1-local:
+        condition: service_healthy
+
+  kafka-connect-3-local:
+    <<: *kafka-connect-common
+    container_name: kafka-connect-3-local
+    hostname: kafka-connect-3-local
+    ports:
+      - "18085:8083"
+    environment:
+      <<: *kafka-connect-common-env
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect-3-local
+    depends_on:
+      kafka-1-local:
+        condition: service_healthy
+      kafka-2-local:
+        condition: service_healthy
+      kafka-3-local:
+        condition: service_healthy
+      schema-registry-local:
+        condition: service_healthy
+      postgres-local:
+        condition: service_healthy
+      elasticsearch-local:
+        condition: service_healthy
+      kafka-connect-1-local:
+        condition: service_healthy
+      kafka-connect-2-local:
+        condition: service_healthy
 
   # ── Conduktor PostgreSQL ──
   cdk-postgres-local:
