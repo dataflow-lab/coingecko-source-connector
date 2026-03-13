@@ -34,6 +34,25 @@ x-kafka-common: &kafka-common
     timeout: 3s
     retries: 20
 
+x-schema-registry-common: &schema-registry-common
+  image: confluentinc/cp-schema-registry:7.9.0
+  depends_on:
+    kafka-1-local:
+      condition: service_healthy
+    kafka-2-local:
+      condition: service_healthy
+    kafka-3-local:
+      condition: service_healthy
+  environment: &schema-registry-common-env
+    SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka-1-local:9090,kafka-2-local:9090,kafka-3-local:9090
+    SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+  healthcheck:
+    test: [ "CMD-SHELL", "curl -f http://localhost:8081/subjects || exit 1" ]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 30s
+
 x-kafka-connect-common-env: &kafka-connect-common-env
   CLASSPATH: "/etc/kafka-connect/schemas"
   CONNECT_BOOTSTRAP_SERVERS: kafka-1-local:9090,kafka-2-local:9090,kafka-3-local:9090
@@ -81,7 +100,7 @@ x-kafka-connect-common: &kafka-connect-common
       condition: service_healthy
     kafka-3-local:
       condition: service_healthy
-    schema-registry-local:
+    schema-registry-1-local:
       condition: service_healthy
     postgres-local:
       condition: service_healthy
@@ -145,29 +164,36 @@ services:
       - kafka-1-local
       - kafka-2-local
 
-  # ── Schema Registry ──
-  schema-registry-local:
-    image: confluentinc/cp-schema-registry:7.9.0
-    container_name: schema-registry-local
+  # ── Schema Registry Cluster (2-node) ──
+  # Both nodes share the network alias "schema-registry-local" so existing
+  # references (Connect, Conduktor) resolve via Docker DNS round-robin.
+  schema-registry-1-local:
+    <<: *schema-registry-common
+    container_name: schema-registry-1-local
+    hostname: schema-registry-1-local
     ports:
       - "18081:8081"
-    depends_on:
-      kafka-1-local:
-        condition: service_healthy
-      kafka-2-local:
-        condition: service_healthy
-      kafka-3-local:
-        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - schema-registry-local
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry-local
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka-1-local:9090,kafka-2-local:9090,kafka-3-local:9090
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8081/subjects || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      <<: *schema-registry-common-env
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-1-local
+
+  schema-registry-2-local:
+    <<: *schema-registry-common
+    container_name: schema-registry-2-local
+    hostname: schema-registry-2-local
+    ports:
+      - "18082:8081"
+    networks:
+      default:
+        aliases:
+          - schema-registry-local
+    environment:
+      <<: *schema-registry-common-env
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry-2-local
 
   # ── Kafka Connect Cluster (3-node) ──
   kafka-connect-1-local:
@@ -196,7 +222,7 @@ services:
         condition: service_healthy
       kafka-3-local:
         condition: service_healthy
-      schema-registry-local:
+      schema-registry-1-local:
         condition: service_healthy
       postgres-local:
         condition: service_healthy
@@ -221,7 +247,7 @@ services:
         condition: service_healthy
       kafka-3-local:
         condition: service_healthy
-      schema-registry-local:
+      schema-registry-1-local:
         condition: service_healthy
       postgres-local:
         condition: service_healthy
